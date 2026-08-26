@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.genai.rag import analyze_compliance
@@ -11,6 +12,26 @@ app = FastAPI(
 )
 
 
+# ============================================================
+# CORS
+# ============================================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ============================================================
+# REQUEST MODEL
+# ============================================================
+
 class ProductRequest(BaseModel):
     product: str
     brand: str | None = None
@@ -19,6 +40,10 @@ class ProductRequest(BaseModel):
     price: str | None = None
 
 
+# ============================================================
+# ROOT
+# ============================================================
+
 @app.get("/")
 def root():
     return {
@@ -26,12 +51,20 @@ def root():
     }
 
 
+# ============================================================
+# HEALTH
+# ============================================================
+
 @app.get("/health")
 def health():
     return {
         "status": "healthy"
     }
 
+
+# ============================================================
+# COMPLIANCE CHECK
+# ============================================================
 
 @app.post("/api/compliance/check")
 def check_compliance(request: ProductRequest):
