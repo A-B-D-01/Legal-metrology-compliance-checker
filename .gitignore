@@ -1,0 +1,22 @@
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+*.env
+backend/.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated FAISS vector database
+backend/vector_stores/legal_metrology_db/*
+!backend/vector_stores/legal_metrology_db/.gitkeep
