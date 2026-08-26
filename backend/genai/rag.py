@@ -10,7 +10,7 @@ from langchain_community.vectorstores import FAISS
 
 
 # ============================================================
-# LOAD ENVIRONMENT VARIABLES
+# ENVIRONMENT
 # ============================================================
 
 load_dotenv("backend/.env")
@@ -36,7 +36,7 @@ VECTOR_STORE_PATH = (
 def load_vector_store():
     """
     Load the FAISS vector database containing
-    the Legal Metrology regulations.
+    Indian Legal Metrology regulations.
     """
 
     embeddings = GoogleGenerativeAIEmbeddings(
@@ -46,7 +46,7 @@ def load_vector_store():
     vector_store = FAISS.load_local(
         str(VECTOR_STORE_PATH),
         embeddings,
-        allow_dangerous_deserialization=True
+        allow_dangerous_deserialization=True,
     )
 
     return vector_store
@@ -56,16 +56,17 @@ def load_vector_store():
 # SEARCH REGULATIONS
 # ============================================================
 
-def search_regulations(question, k=3):
+def search_regulations(question, k=5):
     """
-    Search the regulatory database for relevant rules.
+    Search the Legal Metrology regulatory database
+    for the most relevant regulatory information.
     """
 
     vector_store = load_vector_store()
 
     results = vector_store.similarity_search(
         question,
-        k=k
+        k=k,
     )
 
     return results
@@ -77,18 +78,30 @@ def search_regulations(question, k=3):
 
 def analyze_compliance(product_information):
     """
-    Search relevant regulations and ask Gemini
-    to analyze the product information against them.
+    Analyze an e-commerce product listing against
+    relevant Indian Legal Metrology requirements.
 
-    Returns a structured Python dictionary.
+    The analysis is intentionally restricted to the
+    mandatory declarations that can currently be
+    evaluated from the product information supplied
+    through the API.
     """
 
     print("\nSearching regulatory database...")
 
+    # --------------------------------------------------------
+    # Retrieve relevant regulations using FAISS
+    # --------------------------------------------------------
+
     documents = search_regulations(
         product_information,
-        k=5
+        k=5,
     )
+
+    if not documents:
+        raise RuntimeError(
+            "No relevant regulatory information was found."
+        )
 
     regulatory_context = "\n\n".join(
         document.page_content
@@ -97,61 +110,162 @@ def analyze_compliance(product_information):
 
     print("Relevant regulations retrieved.")
 
-    # ========================================================
-    # GEMINI MODEL
-    # ========================================================
+    # --------------------------------------------------------
+    # Gemini model
+    # --------------------------------------------------------
+
+    print("Sending request to Gemini...")
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
-        temperature=0
+        temperature=0,
+        max_retries=1,
     )
 
-    # ========================================================
-    # PROMPT
-    # ========================================================
+    # --------------------------------------------------------
+    # Compliance prompt
+    # --------------------------------------------------------
 
     prompt = f"""
-You are a Legal Metrology compliance analysis assistant.
+You are an Indian Legal Metrology compliance analysis assistant.
 
-Analyze the provided e-commerce product listing ONLY against
-the regulatory information supplied below.
+Your job is to analyze an e-commerce product listing against
+ONLY the regulatory context provided below.
 
-CRITICAL RULES:
+The current system is checking PRODUCT INFORMATION only.
+
+Do NOT perform physical package/image analysis.
+
+============================================================
+IMPORTANT INSTRUCTIONS
+============================================================
 
 1. Use ONLY the provided regulatory context.
-2. Do NOT invent laws, rules, declarations, penalties,
-   requirements, measurements, or recommendations.
-3. Do NOT assume something is mandatory unless the
-   regulatory context explicitly supports it.
-4. If a requirement depends on whether a product is imported,
-   clearly mark that condition instead of assuming it.
-5. Distinguish between:
-   - COMPLIANT
-   - NON-COMPLIANT
-   - UNCERTAIN
-6. If the regulatory context does not provide enough information
-   to determine something, mark it as UNCERTAIN.
-7. A brand name is NOT automatically the manufacturer name.
-8. Do not treat product size such as "Large" as a legal
-   declaration unless the provided regulations explicitly say so.
-9. Do not create additional requirements that are not present
-   in the regulatory context.
 
+2. Do NOT invent:
+   - rules
+   - rule numbers
+   - penalties
+   - requirements
+   - legal provisions
+
+3. Do NOT assume that a brand name is the manufacturer,
+   packer, or importer.
+
+4. Analyze ONLY these six declaration categories:
+
+   A. Manufacturer / Packer / Importer
+      Relevant rules:
+      Rule 6(a), Rule 6(aa)
+
+   B. Country of Origin
+      Relevant rule:
+      Rule 6(aa)
+      This is conditional and applies when the product
+      is imported.
+
+   C. Common or Generic Name of Commodity
+      Relevant rule:
+      Rule 6(b)
+
+   D. Net Quantity
+      Relevant rule:
+      Rule 6(c)
+
+   E. Month and Year of Manufacture
+      Relevant rule:
+      Rule 6(d)
+
+   F. Retail Sale Price / MRP
+      Relevant rule:
+      Rule 6(e)
+
+5. Do NOT analyze or return results for:
+   - Rule 9 visibility
+   - Rule 9 contrast
+   - Rule 9 legibility
+   - Rule 9 language
+   - handwritten declarations
+   - liquid obstruction
+   - Rule 11 packaging exclusion
+   - Rule 25 MRP alteration
+   - grouped packages
+   - outer packaging
+   - promotional package rules
+   - physical package placement
+   - visual/image-based compliance
+
+6. These excluded requirements will be handled later by
+   other parts of the system, such as the computer vision
+   module.
+
+7. Distinguish carefully between:
+
+   PRESENT
+   The product information explicitly provides the required
+   declaration.
+
+   MISSING
+   The requirement clearly applies and the required
+   information is clearly absent.
+
+   UNCERTAIN
+   The requirement depends on information that has not been
+   provided.
+
+8. If Country of Origin depends on whether the product is
+   imported and the product information does not tell you
+   whether it is imported, classify Country of Origin as
+   UNCERTAIN.
+
+9. Do NOT classify Country of Origin as a violation unless
+   the product is clearly identified as imported.
+
+10. Do NOT assume "Brand" is equivalent to manufacturer.
+
+11. "Size: Large" must NOT automatically be treated as a
+    legal net quantity declaration.
+
+12. A product size such as "Large", "XL", "Medium", etc.
+    is not by itself evidence of net quantity.
+
+13. If the product information clearly contains a declaration,
+    put it in present_declarations.
+
+14. If a mandatory declaration is clearly absent, put it in
+    missing_declarations.
+
+15. Only put something in violations when the information
+    clearly demonstrates a failure to satisfy a requirement.
+
+16. Recommendations must only address the six declaration
+    categories listed above.
+
+17. Keep the answer specific to the supplied product.
+
+18. Return ONLY valid JSON.
+
+19. Do NOT use Markdown.
+
+20. Do NOT wrap the JSON in ```json or ```.
+
+============================================================
 REGULATORY CONTEXT
-==================
+============================================================
+
 {regulatory_context}
 
+============================================================
 PRODUCT INFORMATION
-===================
+============================================================
+
 {product_information}
 
-Return ONLY valid JSON.
+============================================================
+REQUIRED JSON STRUCTURE
+============================================================
 
-Do not use Markdown.
-Do not use code fences.
-Do not include explanations outside the JSON.
-
-Use exactly this structure:
+Return exactly this structure:
 
 {{
     "overall_status": "COMPLIANT | NON-COMPLIANT | UNCERTAIN",
@@ -172,6 +286,14 @@ Use exactly this structure:
         }}
     ],
 
+    "uncertain_declarations": [
+        {{
+            "declaration": "string",
+            "rule": "string",
+            "reason": "string"
+        }}
+    ],
+
     "violations": [
         {{
             "violation": "string",
@@ -184,58 +306,125 @@ Use exactly this structure:
         "string"
     ]
 }}
+
+============================================================
+OVERALL STATUS LOGIC
+============================================================
+
+Use:
+
+COMPLIANT
+Only when all applicable six declaration categories are
+satisfied and there are no clear violations.
+
+NON-COMPLIANT
+When at least one applicable mandatory declaration is
+clearly missing or violated.
+
+UNCERTAIN
+When there is not enough information to determine whether
+the applicable requirements are satisfied and there are no
+clear violations.
+
+If there is at least one clear violation or missing mandatory
+declaration, the overall status should normally be
+NON-COMPLIANT even if other declarations are uncertain.
+
+============================================================
+FINAL VALIDATION
+============================================================
+
+Before returning the response:
+
+- Return valid JSON only.
+- Make sure all six declaration categories were considered.
+- Do not return excluded Rule 9, Rule 11, or Rule 25 checks.
+- Do not invent rule numbers.
+- Do not treat Brand as Manufacturer.
+- Do not treat Size as Net Quantity.
+- Do not automatically require Country of Origin unless the
+  product is clearly imported.
+- Use UNCERTAIN when required information is unavailable.
+- Keep recommendations relevant to the six categories.
 """
 
-    # ========================================================
-    # CALL GEMINI
-    # ========================================================
+
+    # --------------------------------------------------------
+    # Call Gemini
+    # --------------------------------------------------------
+
+    print("Waiting for Gemini response...")
 
     response = llm.invoke(prompt)
 
-    raw_response = response.content.strip()
+    print("Gemini response received.")
 
-    # ========================================================
-    # CLEAN POSSIBLE MARKDOWN CODE FENCES
-    # ========================================================
+    content = response.content
 
-    if raw_response.startswith("```json"):
-        raw_response = raw_response[7:]
+    # --------------------------------------------------------
+    # Clean Gemini response
+    # --------------------------------------------------------
 
-    elif raw_response.startswith("```"):
-        raw_response = raw_response[3:]
+    content = content.strip()
 
-    if raw_response.endswith("```"):
-        raw_response = raw_response[:-3]
+    if content.startswith("```json"):
+        content = content[len("```json"):].strip()
 
-    raw_response = raw_response.strip()
+    elif content.startswith("```"):
+        content = content[len("```"):].strip()
 
-    # ========================================================
-    # PARSE JSON
-    # ========================================================
+    if content.endswith("```"):
+        content = content[:-3].strip()
+
+    # --------------------------------------------------------
+    # Convert Gemini response to Python dictionary
+    # --------------------------------------------------------
 
     try:
-
-        result = json.loads(raw_response)
-
-        return result
+        result = json.loads(content)
 
     except json.JSONDecodeError:
-
-        print("\nWARNING: Gemini did not return valid JSON.")
 
         return {
             "overall_status": "UNCERTAIN",
             "present_declarations": [],
             "missing_declarations": [],
+            "uncertain_declarations": [],
             "violations": [],
             "recommendations": [],
-            "raw_analysis": raw_response,
-            "error": "Gemini returned an invalid JSON response."
+            "raw_analysis": content,
         }
+
+    # --------------------------------------------------------
+    # Basic structure validation
+    # --------------------------------------------------------
+
+    required_keys = [
+        "overall_status",
+        "present_declarations",
+        "missing_declarations",
+        "uncertain_declarations",
+        "violations",
+        "recommendations",
+    ]
+
+    for key in required_keys:
+        if key not in result:
+            result[key] = []
+
+    # Ensure overall_status is valid
+    if result["overall_status"] not in [
+        "COMPLIANT",
+        "NON-COMPLIANT",
+        "UNCERTAIN",
+    ]:
+        result["overall_status"] = "UNCERTAIN"
+
+    return result
 
 
 # ============================================================
-# DIRECT TERMINAL TEST
+# COMMAND LINE TEST
 # ============================================================
 
 if __name__ == "__main__":
@@ -248,17 +437,30 @@ if __name__ == "__main__":
         "\nEnter product information:\n> "
     )
 
-    result = analyze_compliance(product)
+    try:
 
-    print("\n")
-    print("=" * 60)
-    print("COMPLIANCE ANALYSIS")
-    print("=" * 60)
+        result = analyze_compliance(product)
 
-    print(json.dumps(
-        result,
-        indent=4,
-        ensure_ascii=False
-    ))
+        print("\n")
+        print("=" * 60)
+        print("COMPLIANCE ANALYSIS")
+        print("=" * 60)
 
-    print("\n" + "=" * 60)
+        print(
+            json.dumps(
+                result,
+                indent=4,
+                ensure_ascii=False,
+            )
+        )
+
+        print("\n" + "=" * 60)
+
+    except KeyboardInterrupt:
+
+        print("\n\nAnalysis cancelled by user.")
+
+    except Exception as error:
+
+        print("\nERROR:")
+        print(error)

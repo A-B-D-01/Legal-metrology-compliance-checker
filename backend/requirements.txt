@@ -5,3 +5,5 @@ langchain-google-genai
 faiss-cpu
 google-generativeai
 python-dotenv
+fastapi
+uvicorn
