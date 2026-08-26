@@ -1,19 +1,37 @@
-import os
+import json
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_google_genai import (
+    GoogleGenerativeAIEmbeddings,
+    ChatGoogleGenerativeAI,
+)
 from langchain_community.vectorstores import FAISS
 
 
-# Load environment variables
+# ============================================================
+# LOAD ENVIRONMENT VARIABLES
+# ============================================================
+
 load_dotenv("backend/.env")
 
 
-# Paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-VECTOR_STORE_PATH = BASE_DIR / "vector_stores" / "legal_metrology_db"
+# ============================================================
+# PATHS
+# ============================================================
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+VECTOR_STORE_PATH = (
+    BASE_DIR
+    / "vector_stores"
+    / "legal_metrology_db"
+)
+
+
+# ============================================================
+# LOAD FAISS VECTOR DATABASE
+# ============================================================
 
 def load_vector_store():
     """
@@ -34,6 +52,10 @@ def load_vector_store():
     return vector_store
 
 
+# ============================================================
+# SEARCH REGULATIONS
+# ============================================================
+
 def search_regulations(question, k=3):
     """
     Search the regulatory database for relevant rules.
@@ -49,10 +71,16 @@ def search_regulations(question, k=3):
     return results
 
 
+# ============================================================
+# COMPLIANCE ANALYSIS
+# ============================================================
+
 def analyze_compliance(product_information):
     """
     Search relevant regulations and ask Gemini
     to analyze the product information against them.
+
+    Returns a structured Python dictionary.
     """
 
     print("\nSearching regulatory database...")
@@ -69,59 +97,146 @@ def analyze_compliance(product_information):
 
     print("Relevant regulations retrieved.")
 
-    # Gemini model
+    # ========================================================
+    # GEMINI MODEL
+    # ========================================================
+
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
         temperature=0
     )
 
+    # ========================================================
+    # PROMPT
+    # ========================================================
+
     prompt = f"""
 You are a Legal Metrology compliance analysis assistant.
 
-Your task is to analyze an e-commerce product listing
-against the provided Indian Legal Metrology regulations.
+Analyze the provided e-commerce product listing ONLY against
+the regulatory information supplied below.
 
-IMPORTANT:
-- Use ONLY the provided regulatory context.
-- Do not invent regulations.
-- If the provided regulations do not contain enough information,
-  clearly say that the information is insufficient.
-- Distinguish between compliant, non-compliant, and uncertain items.
+CRITICAL RULES:
 
-REGULATORY CONTEXT:
--------------------
+1. Use ONLY the provided regulatory context.
+2. Do NOT invent laws, rules, declarations, penalties,
+   requirements, measurements, or recommendations.
+3. Do NOT assume something is mandatory unless the
+   regulatory context explicitly supports it.
+4. If a requirement depends on whether a product is imported,
+   clearly mark that condition instead of assuming it.
+5. Distinguish between:
+   - COMPLIANT
+   - NON-COMPLIANT
+   - UNCERTAIN
+6. If the regulatory context does not provide enough information
+   to determine something, mark it as UNCERTAIN.
+7. A brand name is NOT automatically the manufacturer name.
+8. Do not treat product size such as "Large" as a legal
+   declaration unless the provided regulations explicitly say so.
+9. Do not create additional requirements that are not present
+   in the regulatory context.
+
+REGULATORY CONTEXT
+==================
 {regulatory_context}
--------------------
 
-PRODUCT INFORMATION:
--------------------
+PRODUCT INFORMATION
+===================
 {product_information}
--------------------
 
-Analyze the product and provide:
+Return ONLY valid JSON.
 
-1. Overall compliance status:
-   COMPLIANT / NON-COMPLIANT / UNCERTAIN
+Do not use Markdown.
+Do not use code fences.
+Do not include explanations outside the JSON.
 
-2. Mandatory declarations that are present.
+Use exactly this structure:
 
-3. Mandatory declarations that are missing.
+{{
+    "overall_status": "COMPLIANT | NON-COMPLIANT | UNCERTAIN",
 
-4. Specific violations.
+    "present_declarations": [
+        {{
+            "declaration": "string",
+            "rule": "string",
+            "evidence": "string"
+        }}
+    ],
 
-5. Relevant Legal Metrology rule numbers.
+    "missing_declarations": [
+        {{
+            "declaration": "string",
+            "rule": "string",
+            "reason": "string"
+        }}
+    ],
 
-6. A short explanation for each violation.
+    "violations": [
+        {{
+            "violation": "string",
+            "rule": "string",
+            "explanation": "string"
+        }}
+    ],
 
-7. Recommended correction.
-
-Return the result in a clear structured format.
+    "recommendations": [
+        "string"
+    ]
+}}
 """
+
+    # ========================================================
+    # CALL GEMINI
+    # ========================================================
 
     response = llm.invoke(prompt)
 
-    return response.content
+    raw_response = response.content.strip()
 
+    # ========================================================
+    # CLEAN POSSIBLE MARKDOWN CODE FENCES
+    # ========================================================
+
+    if raw_response.startswith("```json"):
+        raw_response = raw_response[7:]
+
+    elif raw_response.startswith("```"):
+        raw_response = raw_response[3:]
+
+    if raw_response.endswith("```"):
+        raw_response = raw_response[:-3]
+
+    raw_response = raw_response.strip()
+
+    # ========================================================
+    # PARSE JSON
+    # ========================================================
+
+    try:
+
+        result = json.loads(raw_response)
+
+        return result
+
+    except json.JSONDecodeError:
+
+        print("\nWARNING: Gemini did not return valid JSON.")
+
+        return {
+            "overall_status": "UNCERTAIN",
+            "present_declarations": [],
+            "missing_declarations": [],
+            "violations": [],
+            "recommendations": [],
+            "raw_analysis": raw_response,
+            "error": "Gemini returned an invalid JSON response."
+        }
+
+
+# ============================================================
+# DIRECT TERMINAL TEST
+# ============================================================
 
 if __name__ == "__main__":
 
@@ -140,6 +255,10 @@ if __name__ == "__main__":
     print("COMPLIANCE ANALYSIS")
     print("=" * 60)
 
-    print(result)
+    print(json.dumps(
+        result,
+        indent=4,
+        ensure_ascii=False
+    ))
 
     print("\n" + "=" * 60)
