@@ -1,0 +1,2 @@
+before running do : npm install 
+to run frontend : npm run dev
