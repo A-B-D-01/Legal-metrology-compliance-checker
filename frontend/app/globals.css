@@ -2,17 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 244, 244, 245;
-  --background-start-rgb: 9, 9, 11;
-  --background-end-rgb: 9, 9, 11;
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-  background: #09090b;
-  min-height: 100vh;
-  font-feature-settings: "rlig" 1, "calt" 1;
+@layer base {
+  body {
+    @apply min-h-screen font-sans;
+  }
 }
 
 /* Custom UI Scrollbars */
@@ -22,14 +15,13 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  @apply bg-slate-100 dark:bg-[#09090b];
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 9999px;
+  @apply bg-slate-300 dark:bg-[#27272a] rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  @apply bg-slate-400 dark:bg-[#3f3f46];
 }
