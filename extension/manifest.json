@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "LegalGuard Compliance Checker",
+  "version": "1.0.0",
+  "description": "Check the current webpage with the LegalGuard compliance scraper.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:5000/*",
+    "http://127.0.0.1:5000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}
