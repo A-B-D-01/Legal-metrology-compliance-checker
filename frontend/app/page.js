@@ -27,7 +27,7 @@ export default function HomePage() {
           href="/check-compliance"
           className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/25 transition-all text-sm"
         >
-          Run Compliance Check →
+          Run Compliance Check 
         </Link>
         <Link
           href="/dashboard"
